@@ -1,0 +1,70 @@
+language: c
+
+python:
+  - "2.7"
+
+sudo: false
+
+matrix:
+  include:
+    - compiler: ": Lua51"
+      env: LUA="lua 5.1"
+    - compiler: ": Lua52"
+      env: LUA="lua 5.2"
+    - compiler: ": Lua53"
+      env: LUA="lua 5.3"
+    - compiler: ": LuaJIT20"
+      env: LUA="luajit 2.0"
+    - compiler: ": LuaJIT21"
+      env: LUA="luajit 2.1"
+
+cache:
+  directories:
+    - here
+    - libuv
+    - $HOME/.cache/pip
+
+branches:
+  only:
+    - master
+
+before_install:
+  - export CC=gcc
+  - pip install --user hererocks
+  - hererocks here -r^ --$LUA
+  - export PATH=$PATH:$PWD/here/bin
+  - luarocks show lluv || bash .travis/setup_uv.sh
+
+install:
+  - luarocks make rockspecs/lluv-scm-0.rockspec UV_DIR=$TRAVIS_BUILD_DIR/libuv
+
+before_script:
+  - luarocks show lunitx        || luarocks install lunitx
+  - luarocks show luafilesystem || luarocks install luafilesystem
+  - luarocks show lua-path      || luarocks install lua-path
+  - luarocks show vararg-lua    || luarocks install vararg-lua
+
+script:
+  - cd test
+  - lua test-close.lua
+  - lua test-active.lua
+  - lua test-multi-write.lua
+  - lua test-spawn.lua
+  - lua test-gc-basic.lua
+  - lua test-gc-timer.lua
+  - lua test-gc-tcp.lua
+  - lua test-data.lua
+  - lua test-udp-send-ctx.lua
+  - lua -e"require'lluv.utils'.self_test()"
+  - lunit.sh test-fs.lua
+  - lunit.sh test-defer-error.lua
+  - cd ./luasocket
+  - lua testsrvr.lua > /dev/null &
+  - lua corun.lua testclnt.lua
+  - lua ts.lua > /dev/null &
+  - lua defer_error.lua
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always
